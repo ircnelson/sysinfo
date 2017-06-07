@@ -1,0 +1,8 @@
+[package]
+name = "teste-winapi"
+version = "0.1.0"
+authors = ["Nelson Junior <ircnelson@gmail.com>"]
+
+[dependencies]
+kernel32-sys = "*"
+winapi = "*"
