@@ -2,15 +2,14 @@ extern crate winapi;
 extern crate kernel32;
 extern crate num_cpus;
 
-use std::os::raw::{ c_void };
-use std::mem::{ size_of, size_of_val, uninitialized };
+use std::mem::{ size_of, uninitialized };
 use std::io::Error;
 use std::ffi::OsStr;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
 
-use self::winapi::{ DWORD, MEMORYSTATUSEX, OSVERSIONINFOW, LPFILETIME, SYSTEMTIME };
-use self::kernel32::{ GetComputerNameW, GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW, GetProcessTimes, GetCurrentProcess, FileTimeToSystemTime };
+use self::winapi::{ DWORD, MEMORYSTATUSEX, OSVERSIONINFOW };
+use self::kernel32::{ GetComputerNameW, GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW };
 use super::{ ResourceResult, Platform, DiskInfo, MemoryInfo, CpuInfo, PlatformStats };
 
 static KB : u64 = 1024;
