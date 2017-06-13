@@ -2,15 +2,16 @@ extern crate winapi;
 extern crate kernel32;
 extern crate num_cpus;
 
-use std::mem::{ size_of };
-use std::ptr;
+use std::os::raw::{ c_void };
+use std::mem::{ size_of, size_of_val, uninitialized };
 use std::io::Error;
 use std::ffi::OsStr;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
-use self::winapi::{ DWORD, MEMORYSTATUSEX, OSVERSIONINFOW, SYSTEM_INFO };
-use self::kernel32::{ GetComputerNameW, GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW, GetSystemInfo };
-use super::{ ResourceResult, ResourceError, Platform, DiskInfo, MemoryInfo, CpuInfo, PlatformStats };
+
+use self::winapi::{ DWORD, MEMORYSTATUSEX, OSVERSIONINFOW, LPFILETIME, SYSTEMTIME };
+use self::kernel32::{ GetComputerNameW, GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW, GetProcessTimes, GetCurrentProcess, FileTimeToSystemTime };
+use super::{ ResourceResult, Platform, DiskInfo, MemoryInfo, CpuInfo, PlatformStats };
 
 static KB : u64 = 1024;
 pub static OS_TYPE : &'static str = "Windows";
@@ -43,58 +44,54 @@ impl PlatformStats for Platform {
 
     fn memory_stats() -> ResourceResult<MemoryInfo> {
 
-        let len = size_of::<MEMORYSTATUSEX>() as u32;
+        let mem_stat = unsafe {
+            let mut mem_stat: MEMORYSTATUSEX = uninitialized();
 
-        let mut stat = MEMORYSTATUSEX {
-            dwLength: len,
-            dwMemoryLoad: 0,
-            ullTotalPhys: 0,
-            ullAvailPhys: 0,
-            ullTotalPageFile: 0,
-            ullAvailPageFile: 0,
-            ullTotalVirtual: 0,
-            ullAvailVirtual: 0,
-            ullAvailExtendedVirtual: 0
+            let len = size_of::<MEMORYSTATUSEX>() as u32;
+
+            mem_stat.dwLength = len;
+
+            if GlobalMemoryStatusEx(&mut mem_stat) == 1 {
+                Some(mem_stat)
+            } else {
+                None
+            }
         };
 
-        let ret = unsafe { GlobalMemoryStatusEx(&mut stat) == 1 };
-
-        if ret {
-            let mem_info = MemoryInfo {
-                total: stat.ullTotalPhys / KB,
+        match mem_stat {
+            Some(res) => Ok(MemoryInfo {
+                total: res.ullTotalPhys / KB,
                 avail: 0,
-                free: stat.ullAvailPhys / KB,
+                free: res.ullAvailPhys / KB,
                 cached: 0,
                 buffers: 0,
-                swap_total: stat.ullTotalPageFile / KB,
-                swap_free: stat.ullAvailPageFile / KB
-            };
-
-            Ok(mem_info)
-        } else {
-            Err(Error::last_os_error())
+                swap_total: res.ullTotalPageFile / KB,
+                swap_free: res.ullAvailPageFile / KB
+            }),
+            None => Err(Error::last_os_error())
         }
     }
 
     fn os_release() -> ResourceResult<String> {
 
-        let len = size_of::<OSVERSIONINFOW>() as u32;
+        let os_version = unsafe {
 
-        let mut os_version = OSVERSIONINFOW {
-            dwOSVersionInfoSize: len,
-            dwMajorVersion: 0,
-            dwMinorVersion: 0,
-            dwBuildNumber: 0,
-            dwPlatformId: 0,
-            szCSDVersion: [0; 128]
+            let mut os_version: OSVERSIONINFOW = uninitialized();
+
+            let len = size_of::<OSVERSIONINFOW>() as u32;
+
+            os_version.dwOSVersionInfoSize = len;
+
+            if GetVersionExW(&mut os_version) == 1 {
+                Some(os_version)
+            } else {
+                None
+            }
         };
 
-        let ret = unsafe { GetVersionExW(&mut os_version) == 1 };
-
-        if ret {
-            Ok(format!("{}.{}", os_version.dwMajorVersion, os_version.dwMinorVersion))
-        } else {
-            Err(Error::last_os_error())
+        match os_version {
+            Some(res) => Ok(format!("{}.{}.{}", res.dwMajorVersion, res.dwMinorVersion, res.dwBuildNumber)),
+            None => Err(Error::last_os_error())
         }
     }
 

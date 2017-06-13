@@ -1,3 +1,5 @@
+#![feature(asm)]
+
 #[derive(Debug)]
 pub struct DiskInfo {
     pub total: u64,
@@ -42,6 +44,7 @@ mod sys_info;
 #[path = "unix.rs"]
 mod sys_info;
 
+
 #[cfg(test)]
 mod tests {
 
@@ -51,7 +54,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn disk() {
-        let r = Platform::disk_stats("C:\\");
+        let r = ::Platform::disk_stats("C:\\");
 
         match r {
             Ok(stat) => assert!(stat.free > 0 && stat.total > 0),
