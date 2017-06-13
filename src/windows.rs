@@ -1,23 +1,23 @@
 extern crate winapi;
 extern crate kernel32;
+extern crate num_cpus;
 
-use std::process::Command;
 use std::mem::{ size_of };
 use std::ptr;
 use std::io::Error;
 use std::ffi::OsStr;
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
-use self::winapi::{ MEMORYSTATUSEX, OSVERSIONINFOW, SYSTEM_INFO };
-use self::kernel32::{ GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW, GetSystemInfo };
+use self::winapi::{ DWORD, MEMORYSTATUSEX, OSVERSIONINFOW, SYSTEM_INFO };
+use self::kernel32::{ GetComputerNameW, GetDiskFreeSpaceW, GlobalMemoryStatusEx, GetVersionExW, GetSystemInfo };
 use super::{ ResourceResult, ResourceError, Platform, DiskInfo, MemoryInfo, CpuInfo, PlatformStats };
 
 static KB : u64 = 1024;
-static OS_TYPE : &'static str = "Windows";
+pub static OS_TYPE : &'static str = "Windows";
 
 impl PlatformStats for Platform {
 
-    fn disk_stats<'a, T>(driver: T) -> ResourceResult<'a, DiskInfo> where T : Into<String> {
+    fn disk_stats<T>(driver: T) -> ResourceResult<DiskInfo> where T : Into<String> {
         let disk: Vec<u16> = OsStr::new(&driver.into()).encode_wide().chain(once(0)).collect();
 
         let mut cluster = 0;
@@ -37,11 +37,11 @@ impl PlatformStats for Platform {
 
             Ok(disk_free_space)
         } else {
-            Err(ResourceError::IO(Error::last_os_error()))
+            Err(Error::last_os_error())
         }
     }
 
-    fn memory_stats<'a>() -> ResourceResult<'a, MemoryInfo> {
+    fn memory_stats() -> ResourceResult<MemoryInfo> {
 
         let len = size_of::<MEMORYSTATUSEX>() as u32;
 
@@ -72,11 +72,11 @@ impl PlatformStats for Platform {
 
             Ok(mem_info)
         } else {
-            Err(ResourceError::Generic("cannot get memory information"))
+            Err(Error::last_os_error())
         }
     }
 
-    fn os_release<'a>() -> ResourceResult<'a, String> {
+    fn os_release() -> ResourceResult<String> {
 
         let len = size_of::<OSVERSIONINFOW>() as u32;
 
@@ -94,109 +94,40 @@ impl PlatformStats for Platform {
         if ret {
             Ok(format!("{}.{}", os_version.dwMajorVersion, os_version.dwMinorVersion))
         } else {
-            Err(ResourceError::Generic("cannot get OS version"))
+            Err(Error::last_os_error())
         }
     }
 
-    fn os_type<'a>() -> &'a str {
-        OS_TYPE
+    fn os_type() -> String {
+        OS_TYPE.to_string()
     }
 
-    fn cpu_stats<'a>() -> ResourceResult<'a, CpuInfo> {
+    fn cpu_stats() -> ResourceResult<CpuInfo> {
 
-        let mut sys_info = SYSTEM_INFO {
-            wProcessorArchitecture: 0,
-            wReserved: 0,
-            dwPageSize: 0,
-            lpMinimumApplicationAddress: ptr::null_mut(),
-            lpMaximumApplicationAddress: ptr::null_mut(),
-            dwActiveProcessorMask: 0,
-            dwNumberOfProcessors: 0,
-            dwProcessorType: 0,
-            dwAllocationGranularity: 0,
-            wProcessorLevel: 0,
-            wProcessorRevision: 0,
+        Ok(CpuInfo {
+            num_of_processors: num_cpus::get()
+        })
+    }
+
+    fn computer_name() -> Result<String, ()> {
+
+        const MAX_COMPUTERNAME_LENGTH: usize = 31;
+
+        let mut buf = Vec::<u16>::with_capacity(MAX_COMPUTERNAME_LENGTH + 1);
+        unsafe {
+            let capacity = buf.capacity();
+            buf.set_len(capacity);
+
+            let mut len: DWORD = buf.capacity() as DWORD - 1;
+            if GetComputerNameW(buf.as_mut_ptr(), &mut len as *mut DWORD) == winapi::FALSE {
+                return Err(());
+            }
+            buf.set_len(len as usize);
         };
 
-        unsafe { GetSystemInfo(&mut sys_info) };
-
-        Ok(CpuInfo { num_of_processors: sys_info.dwNumberOfProcessors })
-    }
-
-    fn computer_name<'a>() -> ResourceResult<'a, String> {
-
-        let output = match Command::new("hostname").output() {
-            Ok(o) => o,
-            Err(_) => return Err(ResourceError::Generic("cannot get computer name")),
-        };
-
-        let mut s = String::from_utf8(output.stdout).unwrap();
-        s.pop();
-        s.pop();
-
-        Ok(s)
-    }
-}
-
-#[cfg(test)]
-mod windows_tests {
-
-    use super::{Platform, PlatformStats};
-
-    #[test]
-    fn disk() {
-        let r = Platform::disk_stats("C:\\");
-
-        match r {
-            Ok(stat) => assert!(stat.free > 0 && stat.total > 0),
-            Err(_) => assert!(false)
-        }
-    }
-
-    #[test]
-    fn memory() {
-        let r = Platform::memory_stats();
-
-        match r {
-            Ok(m) => assert!(m.total > 0),
-            Err(_) => assert!(false)
-        };
-    }
-
-    #[test]
-    fn os_release() {
-        let r = Platform::os_release();
-
-        match r {
-            Ok(_) => assert!(true),
-            Err(_) => assert!(false)
-        };
-    }
-
-    #[test]
-    fn os_type() {
-        let r = Platform::os_type();
-
-        assert_eq!(r, super::OS_TYPE.to_string());
-    }
-
-    #[test]
-    fn cpu() {
-        let r = Platform::cpu_stats();
-
-        match r {
-            Ok(stat) => assert!(stat.num_of_processors > 0),
-            Err(_) => assert!(false)
-        }
-    }
-
-    #[test]
-    fn computer_name() {
-        let r = Platform::computer_name();
-
-        match r {
-            Ok(name) => assert!(name.len() > 0),
-            Err(_) => assert!(false)
+        match String::from_utf16(&buf) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(()),
         }
     }
 }
