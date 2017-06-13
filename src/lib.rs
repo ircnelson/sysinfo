@@ -1,5 +1,3 @@
-#![feature(asm)]
-
 #[derive(Debug)]
 pub struct DiskInfo {
     pub total: u64,
@@ -43,7 +41,6 @@ mod sys_info;
 #[cfg(not(windows))]
 #[path = "unix.rs"]
 mod sys_info;
-
 
 #[cfg(test)]
 mod tests {
