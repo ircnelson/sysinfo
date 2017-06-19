@@ -1,3 +1,5 @@
+extern crate libuv_sys;
+
 #[derive(Debug)]
 pub struct DiskInfo {
     pub total: u64,
@@ -48,6 +50,20 @@ mod tests {
     use ::{ PlatformStats };
     use ::sys_info::{ OS_TYPE };
 
+    use std::mem::{ uninitialized };
+    use libuv_sys::{ uv_cpu_info, uv_cpu_info_t };
+
+    #[test]
+    fn hello_libuv() {
+        unsafe {
+            let mut cpu_info : uv_cpu_info_t = uninitialized();
+
+            let ret = uv_cpu_info(&mut cpu_info as *mut _ as *mut _, &mut 8);
+
+            println!("{:?}", ret);
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn disk() {
@@ -72,6 +88,8 @@ mod tests {
     #[test]
     fn os_release() {
         let r = ::Platform::os_release();
+
+        println!("{:?}", r);
 
         match r {
             Ok(_) => assert!(true),

@@ -75,14 +75,19 @@ impl PlatformStats for Platform {
 
         let os_version = unsafe {
 
-            let mut os_version: OSVERSIONINFOW = uninitialized();
-
             let len = size_of::<OSVERSIONINFOW>() as u32;
 
-            os_version.dwOSVersionInfoSize = len;
+            let mut version_info = OSVERSIONINFOW {
+                dwOSVersionInfoSize: len,
+                dwMajorVersion: 0,
+                dwMinorVersion: 0,
+                dwBuildNumber: 0,
+                dwPlatformId: 0,
+                szCSDVersion: [0; 128]
+            };
 
-            if GetVersionExW(&mut os_version) == 1 {
-                Some(os_version)
+            if GetVersionExW(&mut version_info) == 1 {
+                Some(version_info)
             } else {
                 None
             }
@@ -107,7 +112,7 @@ impl PlatformStats for Platform {
 
     fn computer_name() -> Result<String, ()> {
 
-        const MAX_COMPUTERNAME_LENGTH: usize = 31;
+        const MAX_COMPUTERNAME_LENGTH: usize = 255;
 
         let mut buf = Vec::<u16>::with_capacity(MAX_COMPUTERNAME_LENGTH + 1);
         unsafe {
